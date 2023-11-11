@@ -3,6 +3,23 @@ const cors = require("cors");
 
 const app = express();
 
+function requestLogger(request, response, next) {
+  console.log("Method:", request.method);
+  console.log("Path:  ", request.path);
+  console.log("Body:  ", request.body);
+  console.log("---");
+  next();
+}
+
+function unknownEndpoint(request, response) {
+  response.status(404).send({ error: "unknown endpoint" });
+}
+
+app.use(cors());
+app.use(express.json());
+app.use(requestLogger);
+app.use(express.static("dist"));
+
 let notes = [
   {
     id: 1,
@@ -21,35 +38,19 @@ let notes = [
   },
 ];
 
-function requestLogger(request, response, next) {
-  console.log("Method:", request.method);
-  console.log("Path:  ", request.path);
-  console.log("Body:  ", request.body);
-  console.log("---");
-  next();
-}
-
-function unknownEndpoint(request, response) {
-  response.status(404).send({ error: "unknown endpoint" });
-}
-
-app.use(express.json());
-app.use(requestLogger);
-app.use(cors);
-
-app.get("/", (request, response) => {
-  response.send("<h1>Hello World!</h1>");
+app.get("/", (req, res) => {
+  res.send("<h1>Hello World!</h1>");
 });
 
-app.get("/api/notes", (request, response) => {
-  response.json(notes);
+app.get("/api/notes", (req, res) => {
+  res.status(200).json(notes);
 });
 
-app.post("/api/notes", (request, response) => {
-  const body = request.body;
+app.post("/api/notes", (req, res) => {
+  const body = req.body;
 
   if (!body.content) {
-    return response.status(400).json({ error: "Content missing" });
+    return res.status(400).json({ error: "Content missing" });
   }
 
   const note = {
@@ -60,26 +61,26 @@ app.post("/api/notes", (request, response) => {
 
   notes = notes.concat(note);
 
-  response.json(note);
+  res.json(note);
 });
 
-app.get("/api/notes/:id", (request, response) => {
+app.get("/api/notes/:id", (req, res) => {
   // id bertipe string karena itu perlu diubah menjadi number
-  const id = Number(request.params.id);
+  const id = Number(req.params.id);
   const note = notes.find(n => n.id === id);
 
   if (!note) {
-    response.status(404).end();
+    res.status(404).end();
   }
 
-  response.json(note);
+  res.json(note);
 });
 
-app.delete("/api/notes/:id", (request, response) => {
-  const id = Number(request.params.id);
+app.delete("/api/notes/:id", (req, res) => {
+  const id = Number(req.params.id);
   notes = notes.filter(note => note.id !== id);
 
-  response.status(204).end();
+  res.status(204).end();
 });
 
 app.use(unknownEndpoint);
