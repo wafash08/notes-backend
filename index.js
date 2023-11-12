@@ -15,10 +15,6 @@ function requestLogger(request, response, next) {
   next();
 }
 
-function unknownEndpoint(request, response) {
-  response.status(404).send({ error: "unknown endpoint" });
-}
-
 async function connectDB() {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI);
@@ -30,9 +26,9 @@ async function connectDB() {
 }
 
 app.use(cors());
+app.use(express.static("dist"));
 app.use(express.json());
 app.use(requestLogger);
-app.use(express.static("dist"));
 
 let notes = [
   {
@@ -81,19 +77,62 @@ app.post("/api/notes", (req, res) => {
 
 app.get("/api/notes/:id", (req, res) => {
   const noteID = req.params.id;
-  Note.findById(noteID).then(note => {
-    res.json(note);
-  });
+  Note.findById(noteID)
+    .then(note => {
+      if (!note) {
+        res.status(404).end();
+      }
+      res.status(200).json(note);
+    })
+    .catch(error => {
+      // called if the id is invalid
+      console.log(error);
+      res.status(400).send({ error: "malformatted id" });
+    });
 });
 
-app.delete("/api/notes/:id", (req, res) => {
-  const id = Number(req.params.id);
-  notes = notes.filter(note => note.id !== id);
-
-  res.status(204).end();
+app.delete("/api/notes/:id", (req, res, next) => {
+  const noteID = req.params.id;
+  Note.findByIdAndDelete(noteID)
+    .then(result => {
+      res.status(204).end();
+    })
+    .catch(error => next(error));
 });
+
+app.put("/api/notes/:id", (req, res, next) => {
+  const noteID = req.params.id;
+  const body = req.body;
+
+  const note = {
+    content: body.content,
+    important: body.important,
+  };
+
+  Note.findByIdAndUpdate(noteID, note, { new: true })
+    .then(updatedNote => {
+      res.json(updatedNote);
+    })
+    .catch(error => next(error));
+});
+
+function unknownEndpoint(request, response) {
+  response.status(404).send({ error: "unknown endpoint" });
+}
 
 app.use(unknownEndpoint);
+
+const errorHandler = (err, req, res, next) => {
+  console.error(err.message);
+
+  if (err.name === "CastError") {
+    return res.status(400).send({ error: "malformatted id" });
+  }
+
+  next(err);
+};
+
+app.use(errorHandler);
 
 connectDB().then(() => {
   app.listen(PORT, () => {
