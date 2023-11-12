@@ -58,21 +58,24 @@ app.get("/api/notes", (req, res) => {
   });
 });
 
-app.post("/api/notes", (req, res) => {
+app.post("/api/notes", (req, res, next) => {
   const body = req.body;
 
-  if (body.content === undefined) {
-    return res.status(400).json({ error: "Content missing" });
-  }
+  // if (body.content === undefined) {
+  //   return res.status(400).json({ error: "Content missing" });
+  // }
 
   const note = new Note({
     content: body.content,
     important: body.important || false,
   });
 
-  note.save().then(savedNote => {
-    res.json(savedNote);
-  });
+  note
+    .save()
+    .then(savedNote => {
+      res.json(savedNote);
+    })
+    .catch(error => next(error));
 });
 
 app.get("/api/notes/:id", (req, res) => {
@@ -109,7 +112,11 @@ app.put("/api/notes/:id", (req, res, next) => {
     important: body.important,
   };
 
-  Note.findByIdAndUpdate(noteID, note, { new: true })
+  Note.findByIdAndUpdate(noteID, note, {
+    new: true,
+    runValidators: true,
+    context: "query",
+  })
     .then(updatedNote => {
       res.json(updatedNote);
     })
@@ -127,6 +134,8 @@ const errorHandler = (err, req, res, next) => {
 
   if (err.name === "CastError") {
     return res.status(400).send({ error: "malformatted id" });
+  } else if (err.name === "ValidationError") {
+    return res.status(400).json({ error: err.message });
   }
 
   next(err);
