@@ -1,7 +1,11 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
+const Note = require("./models/note");
 
 const app = express();
+const PORT = process.env.PORT;
 
 function requestLogger(request, response, next) {
   console.log("Method:", request.method);
@@ -13,6 +17,16 @@ function requestLogger(request, response, next) {
 
 function unknownEndpoint(request, response) {
   response.status(404).send({ error: "unknown endpoint" });
+}
+
+async function connectDB() {
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.log(error);
+    process.exit(1);
+  }
 }
 
 app.use(cors());
@@ -43,37 +57,33 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/notes", (req, res) => {
-  res.status(200).json(notes);
+  Note.find({}).then(notes => {
+    res.json(notes);
+  });
 });
 
 app.post("/api/notes", (req, res) => {
   const body = req.body;
 
-  if (!body.content) {
+  if (body.content === undefined) {
     return res.status(400).json({ error: "Content missing" });
   }
 
-  const note = {
+  const note = new Note({
     content: body.content,
     important: body.important || false,
-    id: generateID(),
-  };
+  });
 
-  notes = notes.concat(note);
-
-  res.json(note);
+  note.save().then(savedNote => {
+    res.json(savedNote);
+  });
 });
 
 app.get("/api/notes/:id", (req, res) => {
-  // id bertipe string karena itu perlu diubah menjadi number
-  const id = Number(req.params.id);
-  const note = notes.find(n => n.id === id);
-
-  if (!note) {
-    res.status(404).end();
-  }
-
-  res.json(note);
+  const noteID = req.params.id;
+  Note.findById(noteID).then(note => {
+    res.json(note);
+  });
 });
 
 app.delete("/api/notes/:id", (req, res) => {
@@ -85,13 +95,8 @@ app.delete("/api/notes/:id", (req, res) => {
 
 app.use(unknownEndpoint);
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
 });
-
-function generateID() {
-  const listOfNotesID = notes.map(note => note.id);
-  const maxID = notes.length > 0 ? Math.max(...listOfNotesID) : 0;
-  return maxID + 1;
-}
